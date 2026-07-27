@@ -3,7 +3,9 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "master" ]
+    branches:
+      - main
+      - master
   pull_request:
 
 jobs:
@@ -11,62 +13,79 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Show repository structure (debug)
+        shell: bash
+        run: |
+          echo "PWD: $(pwd)"
+          ls -la
+          echo "Searching gradlew..."
+          find . -maxdepth 8 -type f -name "gradlew" -print || true
+
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
 
-      # Finds where gradlew exists (repo root or subfolder like android/)
-      - name: Locate gradlew
-        id: locate
+      - name: Build debug APK (auto-detect gradlew)
+        id: build_apk
         shell: bash
         run: |
-          set -e
-          GRADLEW_PATH="$(find . -maxdepth 3 -type f -name gradlew | head -n 1)"
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "Could not find gradlew in repo."
+          set -euo pipefail
+
+          # Locate gradlew anywhere in repo
+          GRADLEW_PATH="$(find . -maxdepth 8 -type f -name gradlew | head -n 1)"
+
+          if [ -z "${GRADLEW_PATH:-}" ]; then
+            echo "ERROR: gradlew not found."
+            echo "Make sure Gradle wrapper files are committed:"
+            echo "- gradlew"
+            echo "- gradlew.bat"
+            echo "- gradle/wrapper/gradle-wrapper.jar"
+            echo "- gradle/wrapper/gradle-wrapper.properties"
             exit 1
           fi
+
           chmod +x "$GRADLEW_PATH"
           GRADLEW_DIR="$(dirname "$GRADLEW_PATH")"
-          echo "gradlew_path=$GRADLEW_PATH" >> $GITHUB_OUTPUT
-          echo "gradlew_dir=$GRADLEW_DIR" >> $GITHUB_OUTPUT
-          echo "Using gradlew at: $GRADLEW_PATH"
 
-      - name: Build Debug APK
+          echo "Using gradlew: $GRADLEW_PATH"
+          echo "Gradle dir: $GRADLEW_DIR"
+
+          cd "$GRADLEW_DIR"
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Collect APK files
+        id: collect_apk
         shell: bash
         run: |
-          set -e
-          cd "${{ steps.locate.outputs.gradlew_dir }}"
-          ./gradlew assembleDebug
+          set -euo pipefail
 
-      - name: Collect APKs
-        id: collect
-        shell: bash
-        run: |
-          set -e
-          # Search from repo root for all debug APKs
-          APK_LIST=$(find . -type f -name "*debug*.apk" || true)
-          if [ -z "$APK_LIST" ]; then
-            echo "No debug APK found."
+          mkdir -p apk-out
+
+          # Collect all APKs produced in repo
+          mapfile -t APK_FILES < <(find . -type f -name "*.apk")
+
+          if [ "${#APK_FILES[@]}" -eq 0 ]; then
+            echo "ERROR: No APK files found after build."
             exit 1
           fi
-          mkdir -p apk-out
-          while IFS= read -r f; do
+
+          for f in "${APK_FILES[@]}"; do
+            echo "Found APK: $f"
             cp "$f" apk-out/
-          done <<< "$APK_LIST"
-          echo "Found APK files:"
+          done
+
+          echo "APK output folder:"
           ls -la apk-out
-          echo "count=$(ls -1 apk-out/*.apk | wc -l)" >> $GITHUB_OUTPUT
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PlayWell-debug-apk
+          name: PlayWell-APK
           path: apk-out/*.apk
           if-no-files-found: error

@@ -89,6 +89,7 @@ dependencies {
     kapt(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.hilt.work)
+    kapt("androidx.hilt:hilt-compiler:1.1.0")
 
     implementation(libs.androidx.biometric.ktx)
 

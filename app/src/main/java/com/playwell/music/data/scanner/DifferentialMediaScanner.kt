@@ -3,6 +3,7 @@ package com.playwell.music.data.scanner
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.os.Environment
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.playwell.music.data.database.TrackDao
 import com.playwell.music.domain.model.Track
 import java.io.File
@@ -13,7 +14,7 @@ import javax.inject.Singleton
 
 @Singleton
 class DifferentialMediaScanner @Inject constructor(
-    private val context: Context,
+    @ApplicationContext private val context: Context,
     private val trackDao: TrackDao
 ) {
     private val supportedFormats = setOf(
@@ -86,7 +87,7 @@ class DifferentialMediaScanner @Inject constructor(
                     minimumSeconds = minimumSeconds,
                     excludedDirs = excludedDirs,
                     activeFilesOut = activeFilesOut,
-                    discoveredTracksOut = discoveredTracks
+                    discoveredTracksOut = discoveredTracksOut
                 )
             } else {
                 val ext = file.extension.lowercase()
